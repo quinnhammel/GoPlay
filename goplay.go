@@ -80,7 +80,7 @@ func setupHomeDir(dir string) (*os.File, error) {
 }
 
 // Following assumes that the homeDir is set up and the genFiles list has been passed in correctly.
-// Following creates the directory under the home directory. Need to make the directory, add the name to the .generated_dirs file, and add a marker file in the directory (for ensuring do not delete wrong folder later). Then run go mod init on the directory, and return the path.
+// Following creates the directory under the home directory. Need to make the directory, add the name to the .generated_dirs file, and add a marker file in the directory (for ensuring do not delete wrong folder later). Then run go mod init on the directory, and run code commands on the path to open up editor.
 func createPlaygroundDir(homeDir string, name string, genFilesList *os.File) error {
 	if _, err := strconv.Atoi(name); err == nil {
 		return fmt.Errorf("could not create playground \"%s\"; name cannot be an integer", name)
@@ -116,8 +116,8 @@ func createPlaygroundDir(homeDir string, name string, genFilesList *os.File) err
 
 	// Adding main file.
 	file, err := os.OpenFile(path.Join(dirPath, "main.go"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0777)
-	defer file.Close()
 	if err == nil {
+		defer file.Close()
 		// Ok to write to the file.
 		if _, err := io.WriteString(file, programContents); err != nil {
 			return err
@@ -131,8 +131,7 @@ func createPlaygroundDir(homeDir string, name string, genFilesList *os.File) err
 	codeCMDArgs := strings.Split(strings.TrimSpace(getCodeCMD()), " ")
 	dirCodeCMDArgs := append(codeCMDArgs, dirPath)
 	fileCodeCMDArgs := append(codeCMDArgs, path.Join(dirPath, "main.go"))
-	codeCMDArgs = append(codeCMDArgs, dirPath)
-	dirCodeCMD := exec.Command(dirCodeCMDArgs[0], dirCodeCMDArgs[1:]...) // Safe indices since codeCMDArgs was appended to.
+	dirCodeCMD := exec.Command(dirCodeCMDArgs[0], dirCodeCMDArgs[1:]...) // Safe indices since these args were appended to.
 	fileCodeCMD := exec.Command(fileCodeCMDArgs[0], fileCodeCMDArgs[1:]...)
 	if err := dirCodeCMD.Run(); err != nil {
 		return err
@@ -198,9 +197,7 @@ func deletePlaygroundDirs(genFilesList *os.File, homeDir string, nameOrNumber st
 	}
 	// Now, if we are doing a number or all (which means isNumber is set), we need to append to toDelete.
 	if isNumber {
-		for _, filePath := range lines[len(lines)-num:] {
-			toDelete = append(toDelete, filePath) // Files are full path in the .generated_dirs file.
-		}
+		toDelete = append(toDelete, lines[len(lines)-num:]...)
 	}
 	// Now, we are ready to delete. If a delete succeeds, we want to remove that line from the new content of the .generated_dirs file.
 	toExclude := make(map[string]struct{}, len(toDelete))
@@ -209,7 +206,6 @@ func deletePlaygroundDirs(genFilesList *os.File, homeDir string, nameOrNumber st
 		if err := deletePlaygroundDir(filePath); err != nil {
 			// Failed, print error and do not add to toExclude.
 			fmt.Printf("Could not delete %s, got error:\n\t\"%s\"", filePath, err.Error())
-			fmt.Println(err.Error())
 		} else {
 			toExclude[filePath] = struct{}{}
 		}
